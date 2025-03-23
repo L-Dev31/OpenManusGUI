@@ -5,19 +5,17 @@ import webbrowser
 from app.agent.manus import Manus
 from app.logger import logger
 
-# Configuration du logging
+# Configure logging
 logging.basicConfig(level=logging.INFO)
-
-# Initialisation de l'agent
 agent = Manus()
 
-# Fonction pour servir index.html
 async def serve_index(request):
+    """Serve the dashboard (index.html)"""
     with open("index.html", "r") as f:
         return web.Response(text=f.read(), content_type="text/html")
 
-# Gestion des connexions WebSocket
 async def websocket_handler(request):
+    """WebSocket handler for real-time communication"""
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
@@ -32,32 +30,22 @@ async def websocket_handler(request):
                 if not prompt:
                     await ws.send_json({
                         "type": "error",
+
                         "message": "Empty prompt provided."
                     })
                     continue
 
-                # Log de début de traitement
-                await ws.send_json({
-                    "type": "log",
-                    "message": "Processing your request...",
-                    "level": "warning"
-                })
-
                 try:
-                    # Traitement de la requête par l'agent
-                    result = await agent.run(prompt)
+                    # Run the agent with the prompt
+                    await agent.run(prompt)
 
-                    # Log de fin de traitement
-                    await ws.send_json({
-                        "type": "log",
-                        "message": "Request processing completed.",
-                        "level": "success"
-                    })
+                    # Get the formatted thoughts from the agent
+                    final_response = agent.get_thought_content()
 
-                    # Envoi de la réponse
+                    # Send the final response
                     await ws.send_json({
                         "type": "response",
-                        "message": f"Task completed. Result: {result}"
+                        "message": final_response
                     })
 
                 except Exception as e:
@@ -72,23 +60,19 @@ async def websocket_handler(request):
 
     return ws
 
-# Configuration de l'application web
+# Define the web application
 app = web.Application()
 app.router.add_get("/", serve_index)
 app.router.add_get("/ws", websocket_handler)
 
-# Lancement du serveur
 async def start_server():
+    """Start the server and open the browser"""
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "localhost", 8080)
     await site.start()
     logger.info("Server started at http://localhost:8080")
-
-    # Ouvrir le navigateur automatiquement
     webbrowser.open("http://localhost:8080")
-
-    # Garder le serveur en vie
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
