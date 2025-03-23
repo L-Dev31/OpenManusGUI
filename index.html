@@ -1,9 +1,8 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="styles.css" />
     <title>OpenManus</title>
   </head>
   <style>
@@ -481,498 +480,475 @@
     }
 
     .stop-button:disabled {
-      opacity: 0;
+      opacity: 0.5;
       cursor: not-allowed;
     }
   </style>
-  <body>
-    <header>
-      <img
-        src="https://media.discordapp.net/attachments/1309250757937201245/1353360434245402738/logo.png?ex=67e15e9f&is=67e00d1f&hm=d111b4a1f2707f93b6b7f3b8dbcccf35c34b02dd1125b622d60cba243bc3c447&=&format=webp&quality=lossless&width=625&height=450"
-        class="logo"
-      />
-      <div class="status-indicator">
-        <div class="status-dot active" id="status-indicator"></div>
-        <span id="status-text">Connected</span>
-      </div>
-      <button id="toggle-sidebar">≡</button>
-    </header>
-
-    <main>
-      <div class="sidebar" id="sidebar">
-        <div class="new-task-button" id="new-task-button">+ Nouvelle tache</div>
-        <div class="task-list" id="task-list">
-          <div class="no-tasks" id="no-tasks">Aucune discussion</div>
+    </style>
+    <body>
+      <header>
+        <img
+          src="https://media.discordapp.net/attachments/1309250757937201245/1353360434245402738/logo.png?ex=67e15e9f&is=67e00d1f&hm=d111b4a1f2707f93b6b7f3b8dbcccf35c34b02dd1125b622d60cba243bc3c447&=&format=webp&quality=lossless&width=625&height=450"
+          class="logo"
+        />
+        <div class="status-indicator">
+          <div class="status-dot active" id="status-indicator"></div>
+          <span id="status-text">Connected</span>
         </div>
-      </div>
+        <button id="toggle-sidebar">≡</button>
+      </header>
 
-      <div class="chat-container">
-        <div class="messages-container" id="messages-container">
-          <!-- Messages will be added here by JavaScript -->
-        </div>
-        <div class="input-container">
-          <div class="input-wrapper">
-            <textarea
-              id="prompt-input"
-              placeholder="Envoyez un message..."
-              rows="1"
-            ></textarea>
-            <button class="stop-button" id="stop-button" disabled>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path d="M6 6h12v12H6z"></path>
-              </svg>
-            </button>
-            <button class="send-button" id="send-button">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
-              </svg>
-            </button>
+      <main>
+        <div class="sidebar" id="sidebar">
+          <div class="new-task-button" id="new-task-button">+ New Task</div>
+          <div class="task-list" id="task-list">
+            <div class="no-tasks" id="no-tasks">No discussions</div>
           </div>
         </div>
-      </div>
-    </main>
 
-    <div id="context-badge">Discussion actuelle: Aucune</div>
-    <div class="notifications" id="notifications"></div>
+        <div class="chat-container">
+          <div class="messages-container" id="messages-container">
+            <!-- Messages will be added here by JavaScript -->
+          </div>
+          <div class="input-container">
+            <div class="input-wrapper">
+              <textarea
+                id="prompt-input"
+                placeholder="Send a message..."
+                rows="1"
+              ></textarea>
+              <button class="stop-button" id="stop-button" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                  <path d="M6 6h12v12H6z"></path>
+                </svg>
+              </button>
+              <button class="send-button" id="send-button">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
 
-    <script>
-      document.addEventListener("DOMContentLoaded", () => {
-        // DOM Elements
-        const promptInput = document.getElementById("prompt-input");
-        const sendButton = document.getElementById("send-button");
-        const stopButton = document.getElementById("stop-button");
-        const messagesContainer = document.getElementById("messages-container");
-        const taskList = document.getElementById("task-list");
-        const noTasksElement = document.getElementById("no-tasks");
-        const newTaskButton = document.getElementById("new-task-button");
-        const statusDot = document.getElementById("status-indicator");
-        const statusText = document.getElementById("status-text");
-        const contextBadge = document.getElementById("context-badge");
-        const notificationsContainer = document.getElementById("notifications");
-        const toggleSidebarButton = document.getElementById("toggle-sidebar");
-        const sidebar = document.getElementById("sidebar");
+      <div id="context-badge">Current Discussion: None</div>
+      <div class="notifications" id="notifications"></div>
 
-        // State
-        let tasks = [];
-        let currentTaskId = null;
-        let isProcessing = false;
-        let abortController = null;
+      <script>
+        document.addEventListener("DOMContentLoaded", () => {
+          const promptInput = document.getElementById("prompt-input");
+          const sendButton = document.getElementById("send-button");
+          const stopButton = document.getElementById("stop-button");
+          const messagesContainer = document.getElementById("messages-container");
+          const taskList = document.getElementById("task-list");
+          const noTasksElement = document.getElementById("no-tasks");
+          const newTaskButton = document.getElementById("new-task-button");
+          const statusDot = document.getElementById("status-indicator");
+          const statusText = document.getElementById("status-text");
+          const contextBadge = document.getElementById("context-badge");
+          const notificationsContainer = document.getElementById("notifications");
+          const toggleSidebarButton = document.getElementById("toggle-sidebar");
+          const sidebar = document.getElementById("sidebar");
 
-        // Initialize autoresize for textarea
-        promptInput.addEventListener("input", function () {
-          this.style.height = "auto";
-          this.style.height = this.scrollHeight + "px";
-          if (this.scrollHeight > 200) {
-            this.style.height = "200px";
-          }
-        });
+          let tasks = [];
+          let currentTaskId = null;
+          let isProcessing = false;
+          let abortController = null;
 
-        // Toggle sidebar on mobile
-        toggleSidebarButton.addEventListener("click", () => {
-          sidebar.classList.toggle("show");
-        });
-
-        // Create a new task
-        newTaskButton.addEventListener("click", createNewTask);
-
-        // Handle sending a prompt
-        sendButton.addEventListener("click", () => sendPrompt());
-        promptInput.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            sendPrompt();
-          }
-        });
-
-        // Handle stopping the agent
-        stopButton.addEventListener("click", () => {
-          if (abortController) {
-            abortController.abort();
-            abortController = null;
-            setProcessingState(false);
-            showNotification("Agent stopped", "warning");
-          }
-        });
-
-        // Create a websocket connection to the server
-        const socket = new WebSocket(`ws://${window.location.host}/ws`);
-
-        socket.onopen = () => {
-          setConnectionStatus(true);
-          showNotification("Connected to server", "success");
-          addSystemMessage("Connected to OpenManus. Ready to assist you.");
-        };
-
-        socket.onclose = () => {
-          setConnectionStatus(false);
-          showNotification("Disconnected from server", "error");
-          addSystemMessage(
-            "Connection lost. Please refresh the page to reconnect."
-          );
-        };
-
-        socket.onerror = (error) => {
-          console.error("WebSocket error:", error);
-          showNotification("Connection error", "error");
-        };
-
-        socket.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-
-          if (data.type === "log") {
-            addLogEntry(data.message, data.level || "info");
-
-            if (
-              data.level === "success" ||
-              data.message.includes("completed")
-            ) {
-              setProcessingState(false);
+          promptInput.addEventListener("input", function () {
+            this.style.height = "auto";
+            this.style.height = this.scrollHeight + "px";
+            if (this.scrollHeight > 200) {
+              this.style.height = "200px";
             }
-          } else if (data.type === "response") {
-            addSystemMessage(data.message);
-            setProcessingState(false);
-          } else if (data.type === "error") {
-            addLogEntry(data.message, "error");
-            showNotification(data.message, "error");
-            setProcessingState(false);
-          } else if (data.type === "processing") {
-            setProcessingState(true);
-          }
-        };
-
-        // Function to send a prompt to the server
-        function sendPrompt() {
-          const prompt = promptInput.value.trim();
-          if (!prompt || isProcessing) return;
-
-          if (!currentTaskId) {
-            createNewTask().then(() => {
-              executePrompt(prompt);
-            });
-          } else {
-            executePrompt(prompt);
-          }
-        }
-
-        function executePrompt(prompt) {
-          // Add user message to the UI
-          addUserMessage(prompt);
-
-          // Clear input field
-          promptInput.value = "";
-          promptInput.style.height = "auto";
-
-          // Set processing state
-          setProcessingState(true);
-
-          // Create AbortController for stopping the agent
-          abortController = new AbortController();
-
-          // Send to server
-          sendToServer({
-            type: "prompt",
-            prompt: prompt,
-            taskId: currentTaskId,
-            signal: abortController.signal,
-          });
-        }
-
-        function sendToServer(data) {
-          if (socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify(data));
-          } else {
-            showNotification("Connection not available", "error");
-            setProcessingState(false);
-          }
-        }
-
-        // UI Helper Functions
-        function setConnectionStatus(isConnected) {
-          if (isConnected) {
-            statusDot.classList.remove("inactive");
-            statusDot.classList.add("active");
-            statusText.textContent = "Connected";
-          } else {
-            statusDot.classList.remove("active");
-            statusDot.classList.add("inactive");
-            statusText.textContent = "Disconnected";
-          }
-        }
-
-        function setProcessingState(processing) {
-          isProcessing = processing;
-
-          if (processing) {
-            sendButton.disabled = true;
-            sendButton.style.display = "none";
-            stopButton.disabled = false;
-            stopButton.style.display = "flex";
-          } else {
-            sendButton.disabled = false;
-            sendButton.style.display = "flex";
-            stopButton.disabled = true;
-            stopButton.style.display = "none";
-          }
-        }
-
-        function addUserMessage(content) {
-          const messageElement = document.createElement("div");
-          messageElement.className = "message user";
-
-          const contentElement = document.createElement("div");
-          contentElement.className = "message-content";
-          contentElement.textContent = content;
-
-          const timestampElement = document.createElement("div");
-          timestampElement.className = "timestamp";
-          timestampElement.textContent = getCurrentTime();
-
-          messageElement.appendChild(contentElement);
-          messageElement.appendChild(timestampElement);
-
-          messagesContainer.appendChild(messageElement);
-          scrollToBottom();
-
-          // Also update the task preview if this is in a task
-          if (currentTaskId) {
-            updateTaskPreview(currentTaskId, content);
-          }
-        }
-
-        function addSystemMessage(content) {
-          const messageElement = document.createElement("div");
-          messageElement.className = "message system";
-
-          const contentElement = document.createElement("div");
-          contentElement.className = "message-content";
-          contentElement.textContent = content;
-
-          const timestampElement = document.createElement("div");
-          timestampElement.className = "timestamp";
-          timestampElement.textContent = getCurrentTime();
-
-          messageElement.appendChild(contentElement);
-          messageElement.appendChild(timestampElement);
-
-          messagesContainer.appendChild(messageElement);
-          scrollToBottom();
-        }
-
-        function addLogEntry(content, level = "info") {
-          const logElement = document.createElement("div");
-          logElement.className = `log-entry ${level}`;
-          logElement.textContent = content;
-
-          messagesContainer.appendChild(logElement);
-          scrollToBottom();
-        }
-
-        function addCodePreview(content) {
-          const codePreview = document.createElement("div");
-          codePreview.className = "code-preview";
-
-          const pre = document.createElement("pre");
-          pre.textContent = content;
-
-          const copyButton = document.createElement("button");
-          copyButton.textContent = "Copy";
-          copyButton.addEventListener("click", () => {
-            navigator.clipboard.writeText(content);
-            showNotification("Code copied to clipboard", "success");
           });
 
-          codePreview.appendChild(pre);
-          codePreview.appendChild(copyButton);
-
-          messagesContainer.appendChild(codePreview);
-          scrollToBottom();
-        }
-
-        function scrollToBottom() {
-          messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-
-        function getCurrentTime() {
-          const now = new Date();
-          return now.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
+          toggleSidebarButton.addEventListener("click", () => {
+            sidebar.classList.toggle("show");
           });
-        }
 
-        function getFormattedDate() {
-          const now = new Date();
-          return (
-            now.toLocaleDateString() +
-            " " +
-            now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          );
-        }
+          newTaskButton.addEventListener("click", createNewTask);
 
-        function showNotification(message, type = "info") {
-          const notification = document.createElement("div");
-          notification.className = `notification ${type}`;
-          notification.textContent = message;
+          sendButton.addEventListener("click", () => sendPrompt());
+          promptInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              sendPrompt();
+            }
+          });
 
-          notificationsContainer.appendChild(notification);
+          stopButton.addEventListener("click", () => {
+            if (abortController) {
+              abortController.abort();
+              abortController = null;
+              setProcessingState(false);
+              showNotification("Agent stopped", "warning");
+            }
+          });
 
-          // Remove notification after animation completes
-          setTimeout(() => {
-            notification.remove();
-          }, 3000);
-        }
+          const socket = new WebSocket(`ws://${window.location.host}/ws`);
 
-        // Task Management Functions
-        async function createNewTask() {
-          const taskId = "task_" + Date.now();
-          const timestamp = getFormattedDate();
-          const newTask = {
-            id: taskId,
-            title: "New Task",
-            preview: "No content yet",
-            timestamp: timestamp,
-            messages: [],
+          socket.onopen = () => {
+            setConnectionStatus(true);
+            showNotification("Connected to server", "success");
+            addSystemMessage("Connected to OpenManus. Ready to assist you.");
           };
 
-          tasks.push(newTask);
-          createTaskElement(newTask);
-          selectTask(taskId);
-          updateLocalStorage();
+          socket.onclose = () => {
+            setConnectionStatus(false);
+            showNotification("Disconnected from server", "error");
+            addSystemMessage(
+              "Connection lost. Please refresh the page to reconnect."
+            );
+          };
 
-          return taskId;
-        }
+          socket.onerror = (error) => {
+            console.error("WebSocket error:", error);
+            showNotification("Connection error", "error");
+          };
 
-        function createTaskElement(task) {
-          noTasksElement.style.display = "none";
-          const taskElement = document.createElement("div");
-          taskElement.className = "task-item";
-          taskElement.id = `task-${task.id}`;
-          taskElement.dataset.taskId = task.id;
+          socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
 
-          const titleElement = document.createElement("div");
-          titleElement.className = "task-title";
-          titleElement.textContent = task.title;
+            if (data.type === "log") {
+              addLogEntry(data.message, data.level || "info");
 
-          const previewElement = document.createElement("div");
-          previewElement.className = "task-preview";
-          previewElement.textContent = task.preview;
+              if (
+                data.level === "success" ||
+                data.message.includes("completed")
+              ) {
+                setProcessingState(false);
+              }
+            } else if (data.type === "response") {
+              addSystemMessage(data.message);
+              setProcessingState(false);
+            } else if (data.type === "error") {
+              addLogEntry(data.message, "error");
+              showNotification(data.message, "error");
+              setProcessingState(false);
+            } else if (data.type === "processing") {
+              setProcessingState(true);
+            }
+          };
 
-          const timestampElement = document.createElement("div");
-          timestampElement.className = "timestamp";
-          timestampElement.textContent = task.timestamp;
+          function sendPrompt() {
+            const prompt = promptInput.value.trim();
+            if (!prompt || isProcessing) return;
 
-          taskElement.appendChild(titleElement);
-          taskElement.appendChild(previewElement);
-          taskElement.appendChild(timestampElement);
-
-          taskElement.addEventListener("click", () => {
-            selectTask(task.id);
-          });
-
-          taskList.insertBefore(taskElement, taskList.firstChild);
-        }
-
-        function selectTask(taskId) {
-          // Remove selection from all tasks
-          document.querySelectorAll(".task-item").forEach((item) => {
-            item.classList.remove("selected");
-          });
-
-          // Add selection to current task
-          const taskElement = document.getElementById(`task-${taskId}`);
-          if (taskElement) {
-            taskElement.classList.add("selected");
-          }
-
-          currentTaskId = taskId;
-          messagesContainer.innerHTML = "";
-
-          // Load messages from this task
-          const task = tasks.find((t) => t.id === taskId);
-          if (task) {
-            if (task.messages && task.messages.length > 0) {
-              task.messages.forEach((msg) => {
-                if (msg.sender === "user") {
-                  addUserMessage(msg.content);
-                } else {
-                  addSystemMessage(msg.content);
-                }
+            if (!currentTaskId) {
+              createNewTask().then(() => {
+                executePrompt(prompt);
               });
             } else {
-              addSystemMessage("New task started. Enter your prompt to begin.");
+              executePrompt(prompt);
             }
+          }
 
-            // Update context badge
-            contextBadge.textContent = `Current task: ${task.title}`;
-            contextBadge.style.opacity = "1";
+          function executePrompt(prompt) {
+            addUserMessage(prompt);
+
+            promptInput.value = "";
+            promptInput.style.height = "auto";
+
+            setProcessingState(true);
+
+            abortController = new AbortController();
+
+            sendToServer({
+              type: "prompt",
+              prompt: prompt,
+              taskId: currentTaskId,
+              signal: abortController.signal,
+            });
+          }
+
+          function sendToServer(data) {
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify(data));
+            } else {
+              showNotification("Connection not available", "error");
+              setProcessingState(false);
+            }
+          }
+
+          function setConnectionStatus(isConnected) {
+            if (isConnected) {
+              statusDot.classList.remove("inactive");
+              statusDot.classList.add("active");
+              statusText.textContent = "Connected";
+            } else {
+              statusDot.classList.remove("active");
+              statusDot.classList.add("inactive");
+              statusText.textContent = "Disconnected";
+            }
+          }
+
+          function setProcessingState(processing) {
+            isProcessing = processing;
+
+            if (processing) {
+              sendButton.disabled = true;
+              sendButton.style.display = "none";
+              stopButton.disabled = false;
+              stopButton.style.display = "flex";
+            } else {
+              sendButton.disabled = false;
+              sendButton.style.display = "flex";
+              stopButton.disabled = true;
+              stopButton.style.display = "none";
+            }
+          }
+
+          function addUserMessage(content) {
+            const messageElement = document.createElement("div");
+            messageElement.className = "message user";
+
+            const contentElement = document.createElement("div");
+            contentElement.className = "message-content";
+            contentElement.textContent = content;
+
+            const timestampElement = document.createElement("div");
+            timestampElement.className = "timestamp";
+            timestampElement.textContent = getCurrentTime();
+
+            messageElement.appendChild(contentElement);
+            messageElement.appendChild(timestampElement);
+
+            messagesContainer.appendChild(messageElement);
+            scrollToBottom();
+
+            if (currentTaskId) {
+              updateTaskPreview(currentTaskId, content);
+            }
+          }
+
+          function addSystemMessage(content) {
+            const messageElement = document.createElement("div");
+            messageElement.className = "message system";
+
+            const contentElement = document.createElement("div");
+            contentElement.className = "message-content";
+            contentElement.textContent = content;
+
+            const timestampElement = document.createElement("div");
+            timestampElement.className = "timestamp";
+            timestampElement.textContent = getCurrentTime();
+
+            messageElement.appendChild(contentElement);
+            messageElement.appendChild(timestampElement);
+
+            messagesContainer.appendChild(messageElement);
+            scrollToBottom();
+          }
+
+          function addLogEntry(content, level = "info") {
+            const logElement = document.createElement("div");
+            logElement.className = `log-entry ${level}`;
+            logElement.textContent = content;
+
+            messagesContainer.appendChild(logElement);
+            scrollToBottom();
+          }
+
+          function addCodePreview(content) {
+            const codePreview = document.createElement("div");
+            codePreview.className = "code-preview";
+
+            const pre = document.createElement("pre");
+            pre.textContent = content;
+
+            const copyButton = document.createElement("button");
+            copyButton.textContent = "Copy";
+            copyButton.addEventListener("click", () => {
+              navigator.clipboard.writeText(content);
+              showNotification("Code copied to clipboard", "success");
+            });
+
+            codePreview.appendChild(pre);
+            codePreview.appendChild(copyButton);
+
+            messagesContainer.appendChild(codePreview);
+            scrollToBottom();
+          }
+
+          function scrollToBottom() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
+
+          function getCurrentTime() {
+            const now = new Date();
+            return now.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+          }
+
+          function getFormattedDate() {
+            const now = new Date();
+            return (
+              now.toLocaleDateString() +
+              " " +
+              now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            );
+          }
+
+          function showNotification(message, type = "info") {
+            const notification = document.createElement("div");
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+
+            notificationsContainer.appendChild(notification);
+
             setTimeout(() => {
-              contextBadge.style.opacity = "0";
+              notification.remove();
             }, 3000);
           }
 
-          // On mobile, hide sidebar after selection
-          if (window.innerWidth <= 768) {
-            sidebar.classList.remove("show");
-          }
-        }
+          async function createNewTask() {
+            const taskId = "task_" + Date.now();
+            const timestamp = getFormattedDate();
+            const newTask = {
+              id: taskId,
+              title: "New Task",
+              preview: "No content yet",
+              timestamp: timestamp,
+              messages: [],
+            };
 
-        function updateTaskPreview(taskId, content) {
-          const task = tasks.find((t) => t.id === taskId);
-          if (task) {
-            task.preview =
-              content.length > 40 ? content.substring(0, 40) + "..." : content;
-            task.title = `Task ${tasks.indexOf(task) + 1}`;
-            task.messages.push({
-              sender: "user",
-              content: content,
-              timestamp: new Date().toISOString(),
+            tasks.push(newTask);
+            createTaskElement(newTask);
+            selectTask(taskId);
+            updateLocalStorage();
+
+            return taskId;
+          }
+
+          function createTaskElement(task) {
+            noTasksElement.style.display = "none";
+            const taskElement = document.createElement("div");
+            taskElement.className = "task-item";
+            taskElement.id = `task-${task.id}`;
+            taskElement.dataset.taskId = task.id;
+
+            const titleElement = document.createElement("div");
+            titleElement.className = "task-title";
+            titleElement.textContent = task.title;
+
+            const previewElement = document.createElement("div");
+            previewElement.className = "task-preview";
+            previewElement.textContent = task.preview;
+
+            const timestampElement = document.createElement("div");
+            timestampElement.className = "timestamp";
+            timestampElement.textContent = task.timestamp;
+
+            taskElement.appendChild(titleElement);
+            taskElement.appendChild(previewElement);
+            taskElement.appendChild(timestampElement);
+
+            taskElement.addEventListener("click", () => {
+              selectTask(task.id);
+            });
+
+            taskList.insertBefore(taskElement, taskList.firstChild);
+          }
+
+          function selectTask(taskId) {
+            document.querySelectorAll(".task-item").forEach((item) => {
+              item.classList.remove("selected");
             });
 
             const taskElement = document.getElementById(`task-${taskId}`);
             if (taskElement) {
-              const titleElement = taskElement.querySelector(".task-title");
-              const previewElement = taskElement.querySelector(".task-preview");
-
-              if (titleElement) titleElement.textContent = task.title;
-              if (previewElement) previewElement.textContent = task.preview;
+              taskElement.classList.add("selected");
             }
 
-            updateLocalStorage();
-          }
-        }
+            currentTaskId = taskId;
+            messagesContainer.innerHTML = "";
 
-        function storeSystemResponse(content) {
-          if (currentTaskId) {
-            const task = tasks.find((t) => t.id === currentTaskId);
+            const task = tasks.find((t) => t.id === taskId);
             if (task) {
+              if (task.messages && task.messages.length > 0) {
+                task.messages.forEach((msg) => {
+                  if (msg.sender === "user") {
+                    addUserMessage(msg.content);
+                  } else {
+                    addSystemMessage(msg.content);
+                  }
+                });
+              } else {
+                addSystemMessage("New task started. Enter your prompt to begin.");
+              }
+
+              contextBadge.textContent = `Current task: ${task.title}`;
+              contextBadge.style.opacity = "1";
+              setTimeout(() => {
+                contextBadge.style.opacity = "0";
+              }, 3000);
+            }
+
+            if (window.innerWidth <= 768) {
+              sidebar.classList.remove("show");
+            }
+          }
+
+          function updateTaskPreview(taskId, content) {
+            const task = tasks.find((t) => t.id === taskId);
+            if (task) {
+              task.preview =
+                content.length > 40 ? content.substring(0, 40) + "..." : content;
+              task.title = `Task ${tasks.indexOf(task) + 1}`;
               task.messages.push({
-                sender: "system",
+                sender: "user",
                 content: content,
                 timestamp: new Date().toISOString(),
               });
+
+              const taskElement = document.getElementById(`task-${taskId}`);
+              if (taskElement) {
+                const titleElement = taskElement.querySelector(".task-title");
+                const previewElement = taskElement.querySelector(".task-preview");
+
+                if (titleElement) titleElement.textContent = task.title;
+                if (previewElement) previewElement.textContent = task.preview;
+              }
+
               updateLocalStorage();
             }
           }
-        }
 
-        function updateLocalStorage() {
-          localStorage.setItem("openmanus_tasks", JSON.stringify(tasks));
-        }
-
-        function loadTasksFromStorage() {
-          const storedTasks = localStorage.getItem("openmanus_tasks");
-          if (storedTasks) {
-            tasks = JSON.parse(storedTasks);
-            if (tasks.length > 0) {
-              noTasksElement.style.display = "none";
-              tasks.forEach((task) => createTaskElement(task));
+          function storeSystemResponse(content) {
+            if (currentTaskId) {
+              const task = tasks.find((t) => t.id === currentTaskId);
+              if (task) {
+                task.messages.push({
+                  sender: "system",
+                  content: content,
+                  timestamp: new Date().toISOString(),
+                });
+                updateLocalStorage();
+              }
             }
           }
-        }
 
-        // Initialize
-        loadTasksFromStorage();
-      });
-    </script>
-  </body>
-</html>
+          function updateLocalStorage() {
+            localStorage.setItem("openmanus_tasks", JSON.stringify(tasks));
+          }
+
+          function loadTasksFromStorage() {
+            const storedTasks = localStorage.getItem("openmanus_tasks");
+            if (storedTasks) {
+              tasks = JSON.parse(storedTasks);
+              if (tasks.length > 0) {
+                noTasksElement.style.display = "none";
+                tasks.forEach((task) => createTaskElement(task));
+              }
+            }
+          }
+
+          loadTasksFromStorage();
+        });
+      </script>
+    </body>
+  </html>
