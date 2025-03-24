@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenManus</title>
+    <link rel="stylesheet" href="/gui/styles.css" />
+  </head>
+  <body>
+    <header>
+      <img
+        src="https://media.discordapp.net/attachments/1309250757937201245/1353360434245402738/logo.png?ex=67e15e9f&is=67e00d1f&hm=d111b4a1f2707f93b6b7f3b8dbcccf35c34b02dd1125b622d60cba243bc3c447&=&format=webp&quality=lossless&width=625&height=450"
+        class="logo"
+      />
+      <div class="status-indicator">
+        <div class="status-dot active" id="status-indicator"></div>
+        <span id="status-text">Connected</span>
+      </div>
+      <button id="toggle-sidebar">≡</button>
+    </header>
+
+    <main>
+      <div class="sidebar" id="sidebar">
+        <div class="new-task-button" id="new-task-button">+ New Task</div>
+        <div class="task-list" id="task-list">
+          <div class="no-tasks" id="no-tasks">No discussions</div>
+        </div>
+      </div>
+
+      <div class="chat-container">
+        <div class="messages-container" id="messages-container">
+          <!-- Messages will be added here by JavaScript -->
+        </div>
+        <div class="input-container">
+          <div class="input-wrapper">
+            <textarea
+              id="prompt-input"
+              placeholder="Send a message..."
+              rows="1"
+            ></textarea>
+            <button class="stop-button" id="stop-button" disabled>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M6 6h12v12H6z"></path>
+              </svg>
+            </button>
+            <button class="send-button" id="send-button">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div id="context-badge">Current Discussion: None</div>
+    <div class="notifications" id="notifications"></div>
+
+    <script src="/gui/script.js"></script>
+  </body>
+</html>

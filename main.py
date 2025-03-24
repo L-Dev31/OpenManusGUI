@@ -5,19 +5,18 @@ import webbrowser
 from app.agent.manus import Manus
 from app.logger import logger
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 agent = Manus()
 
 async def serve_index(request):
-    """Serve the dashboard (index.html)"""
-    with open("index.html", "r") as f:
+    with open("gui/index.html", "r") as f:
         return web.Response(text=f.read(), content_type="text/html")
 
 async def websocket_handler(request):
-    """WebSocket handler for real-time communication"""
     ws = web.WebSocketResponse()
     await ws.prepare(request)
+
+    agent.set_websocket(ws)
 
     async for msg in ws:
         if msg.type == web.WSMsgType.TEXT:
@@ -30,19 +29,22 @@ async def websocket_handler(request):
                 if not prompt:
                     await ws.send_json({
                         "type": "error",
-
                         "message": "Empty prompt provided."
                     })
                     continue
 
                 try:
-                    # Run the agent with the prompt
+                    logger.warning(f"Processing in progress for task ID: {task_id}")
+
+                    await ws.send_json({
+                        "type": "update",
+                        "message": f"🎯 Received task {task_id}: {prompt}"
+                    })
+
                     await agent.run(prompt)
 
-                    # Get the formatted thoughts from the agent
                     final_response = agent.get_thought_content()
 
-                    # Send the final response
                     await ws.send_json({
                         "type": "response",
                         "message": final_response
@@ -60,13 +62,12 @@ async def websocket_handler(request):
 
     return ws
 
-# Define the web application
 app = web.Application()
 app.router.add_get("/", serve_index)
 app.router.add_get("/ws", websocket_handler)
+app.router.add_static("/gui/", path="gui", name="gui")
 
 async def start_server():
-    """Start the server and open the browser"""
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "localhost", 8080)
