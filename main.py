@@ -12,11 +12,18 @@ async def serve_index(request):
     with open("gui/index.html", "r") as f:
         return web.Response(text=f.read(), content_type="text/html")
 
+async def serve_js(request):
+    with open("gui/script.js", "r") as f:
+        return web.Response(text=f.read(), content_type="application/javascript")
+
+async def serve_css(request):
+    with open("gui/styles.css", "r") as f:
+        return web.Response(text=f.read(), content_type="text/css")
+
 async def websocket_handler(request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
-
-    agent.set_websocket(ws)
+    agent.set_websocket(ws)  # Set WebSocket in the agent
 
     async for msg in ws:
         if msg.type == web.WSMsgType.TEXT:
@@ -35,20 +42,9 @@ async def websocket_handler(request):
 
                 try:
                     logger.warning(f"Processing in progress for task ID: {task_id}")
-
-                    await ws.send_json({
-                        "type": "update",
-                        "message": f"🎯 Received task {task_id}: {prompt}"
-                    })
-
-                    await agent.run(prompt)
-
-                    final_response = agent.get_thought_content()
-
-                    await ws.send_json({
-                        "type": "response",
-                        "message": final_response
-                    })
+                    await agent.send_update(f"🎯 Received task {task_id}: {prompt}")
+                    await agent.run(prompt)  # Process the task asynchronously
+                    await agent.send_update("🚀 Task completed.")
 
                 except Exception as e:
                     logger.error(f"Error processing prompt: {e}")
@@ -65,7 +61,8 @@ async def websocket_handler(request):
 app = web.Application()
 app.router.add_get("/", serve_index)
 app.router.add_get("/ws", websocket_handler)
-app.router.add_static("/gui/", path="gui", name="gui")
+app.router.add_get("/gui/script.js", serve_js)
+app.router.add_get("/gui/styles.css", serve_css)
 
 async def start_server():
     runner = web.AppRunner(app)
