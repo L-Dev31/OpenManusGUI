@@ -1,77 +1,161 @@
 import asyncio
-from aiohttp import web
-import logging
+import os
+import sys
+import threading
+import http.server
+import socketserver
 import webbrowser
+import json
+import websockets
+from pathlib import Path
+
 from app.agent.manus import Manus
 from app.logger import logger
 
-logging.basicConfig(level=logging.INFO)
-agent = Manus()
+BASE_DIR = Path(__file__).parent
+GUI_DIR = BASE_DIR / "gui"
+GUI_DIR.mkdir(exist_ok=True)
 
-async def serve_index(request):
-    with open("gui/index.html", "r") as f:
-        return web.Response(text=f.read(), content_type="text/html")
+class WebSocketServer:
+    def __init__(self):
+        self.agent = None
+        self.clients = set()
+        self.lock = asyncio.Lock()
 
-async def serve_js(request):
-    with open("gui/script.js", "r") as f:
-        return web.Response(text=f.read(), content_type="application/javascript")
+    async def register(self, websocket):
+        async with self.lock:
+            self.clients.add(websocket)
 
-async def serve_css(request):
-    with open("gui/styles.css", "r") as f:
-        return web.Response(text=f.read(), content_type="text/css")
+    async def unregister(self, websocket):
+        async with self.lock:
+            self.clients.remove(websocket)
 
-async def websocket_handler(request):
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
-    agent.set_websocket(ws)  # Set WebSocket in the agent
+    async def send_to_all(self, message):
+        if not self.clients:
+            return
+        await asyncio.gather(*[client.send(message) for client in self.clients])
 
-    async for msg in ws:
-        if msg.type == web.WSMsgType.TEXT:
-            data = msg.json()
+    async def handler(self, websocket):
+        await self.register(websocket)
+        try:
+            # Send initial connection confirmation
+            await websocket.send(json.dumps({
+                "type": "connection",
+                "status": "connected",
+                "content": "Connected to OpenManus"
+            }))
 
-            if data.get("type") == "prompt":
-                prompt = data.get("prompt", "").strip()
-                task_id = data.get("taskId")
-
-                if not prompt:
-                    await ws.send_json({
-                        "type": "error",
-                        "message": "Empty prompt provided."
-                    })
-                    continue
-
+            async for message in websocket:
                 try:
-                    logger.warning(f"Processing in progress for task ID: {task_id}")
-                    await agent.send_update(f"🎯 Received task {task_id}: {prompt}")
-                    await agent.run(prompt)  # Process the task asynchronously
-                    await agent.send_update("🚀 Task completed.")
+                    data = json.loads(message)
+                    if data["type"] == "message":
+                        prompt = data["content"]
+                        if not prompt.strip():
+                            await websocket.send(json.dumps({
+                                "type": "error",
+                                "content": "Empty prompt provided."
+                            }))
+                            continue
 
-                except Exception as e:
-                    logger.error(f"Error processing prompt: {e}")
-                    await ws.send_json({
+                        await websocket.send(json.dumps({
+                            "type": "status",
+                            "content": "Processing your request"
+                        }))
+
+                        if not self.agent:
+                            self.agent = Manus()
+
+                        try:
+                            response = await self.agent.run(prompt)
+                            await websocket.send(json.dumps({
+                                "type": "response",
+                                "content": response if response else "Request processed successfully."
+                            }))
+                        except Exception as e:
+                            logger.error(f"Error processing request: {str(e)}")
+                            await websocket.send(json.dumps({
+                                "type": "error",
+                                "content": f"Error processing request: {str(e)}"
+                            }))
+                    elif data["type"] == "config":
+                        # Handle configuration requests
+                        if "action" in data and data["action"] == "get":
+                            # Send current configuration
+                            config_path = BASE_DIR / "config/config.toml"
+                            if config_path.exists():
+                                config_content = config_path.read_text(encoding="utf-8")
+                                await websocket.send(json.dumps({
+                                    "type": "config",
+                                    "content": config_content
+                                }))
+                            else:
+                                await websocket.send(json.dumps({
+                                    "type": "error",
+                                    "content": "Configuration file not found."
+                                }))
+                        elif "action" in data and data["action"] == "save" and "content" in data:
+                            # Save configuration
+                            config_path = BASE_DIR / "config.toml"
+                            try:
+                                with open(config_path, "w", encoding="utf-8") as f:
+                                    f.write(data["content"])
+                                await websocket.send(json.dumps({
+                                    "type": "success",
+                                    "content": "Configuration saved successfully."
+                                }))
+                            except Exception as e:
+                                logger.error(f"Error saving configuration: {str(e)}")
+                                await websocket.send(json.dumps({
+                                    "type": "error",
+                                    "content": f"Error saving configuration: {str(e)}"
+                                }))
+                except json.JSONDecodeError:
+                    await websocket.send(json.dumps({
                         "type": "error",
-                        "message": f"An error occurred: {str(e)}"
-                    })
+                        "content": "Invalid JSON message."
+                    }))
+        except websockets.exceptions.ConnectionClosed:
+            logger.info("WebSocket connection closed")
+        finally:
+            await self.unregister(websocket)
+            if not self.clients and self.agent:
+                await self.agent.cleanup()
+                self.agent = None
 
-        elif msg.type == web.WSMsgType.ERROR:
-            logger.error(f"WebSocket connection closed with exception: {ws.exception()}")
+def start_web_server():
+    PORT = 8080
 
-    return ws
+    class ArgonHandler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=BASE_DIR, **kwargs)
 
-app = web.Application()
-app.router.add_get("/", serve_index)
-app.router.add_get("/ws", websocket_handler)
-app.router.add_get("/gui/script.js", serve_js)
-app.router.add_get("/gui/styles.css", serve_css)
+        def log_message(self, format, *args):
+            pass
 
-async def start_server():
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "localhost", 8080)
-    await site.start()
-    logger.info("Server started at http://localhost:8080")
-    webbrowser.open("http://localhost:8080")
-    await asyncio.Event().wait()
+    try:
+        with socketserver.TCPServer(("", PORT), ArgonHandler) as httpd:
+            logger.info(f"Argon interface available at http://localhost:{PORT}/gui/")
+            webbrowser.open(f"http://localhost:{PORT}/gui/")
+            httpd.serve_forever()
+    except OSError as e:
+        logger.error(f"Error starting web server: {e}")
+
+async def start_websocket_server():
+    ws_server = WebSocketServer()
+    async with websockets.serve(ws_server.handler, "localhost", 8081):
+        logger.info("WebSocket server started on port 8081")
+        await asyncio.Future()
+
+async def main():
+    web_thread = threading.Thread(target=start_web_server, daemon=True)
+    web_thread.start()
+
+    await start_websocket_server()
 
 if __name__ == "__main__":
-    asyncio.run(start_server())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Server shutdown requested")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")

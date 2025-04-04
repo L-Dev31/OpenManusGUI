@@ -1,438 +1,300 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const promptInput = document.getElementById("prompt-input");
-  const sendButton = document.getElementById("send-button");
-  const stopButton = document.getElementById("stop-button");
   const messagesContainer = document.getElementById("messages-container");
-  const taskList = document.getElementById("task-list");
-  const noTasksElement = document.getElementById("no-tasks");
-  const newTaskButton = document.getElementById("new-task-button");
-  const statusDot = document.getElementById("status-indicator");
+  const welcomeMessage = document.querySelector(".welcome-message");
+  const messageInput = document.getElementById("prompt-input");
+  const sendBtn = document.getElementById("send-button");
+  const stopBtn = document.getElementById("stop-button");
+  const statusIndicator = document.getElementById("status-indicator");
   const statusText = document.getElementById("status-text");
+  const newTaskButton = document.getElementById("new-task-button");
+  const taskList = document.getElementById("task-list");
+  const noTasks = document.getElementById("no-tasks");
   const contextBadge = document.getElementById("context-badge");
-  const notificationsContainer = document.getElementById("notifications");
-  const toggleSidebarButton = document.getElementById("toggle-sidebar");
-  const sidebar = document.getElementById("sidebar");
 
-  let tasks = [];
-  let currentTaskId = null;
-  let isProcessing = false;
-  let abortController = null;
+  const ASSISTANT_AVATAR = "assistant.png";
+  const USER_AVATAR = "user.png";
 
-  promptInput.addEventListener("input", function () {
-    this.style.height = "auto";
-    this.style.height = this.scrollHeight + "px";
-    if (this.scrollHeight > 200) {
-      this.style.height = "200px";
-    }
-  });
+  let currentChatId = generateId();
+  let chats = {};
+  chats[currentChatId] = { messages: [] };
 
-  toggleSidebarButton.addEventListener("click", () => {
-    sidebar.classList.toggle("show");
-  });
-
-  newTaskButton.addEventListener("click", createNewTask);
-
-  sendButton.addEventListener("click", () => sendPrompt());
-  promptInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendPrompt();
-    }
-  });
-
-  stopButton.addEventListener("click", () => {
-    if (abortController) {
-      abortController.abort();
-      abortController = null;
-      setProcessingState(false);
-      showNotification("Agent stopped", "warning");
-    }
-  });
-
-  const socket = new WebSocket(`ws://${window.location.host}/ws`);
+  const socket = new WebSocket("ws://localhost:8081");
 
   socket.onopen = () => {
-    setConnectionStatus(true);
-    showNotification("Connected to server", "success");
-    addSystemMessage("Connected to OpenManus. Ready to assist you.");
+    statusIndicator.classList.add("active");
+    statusText.textContent = "Connected";
+    addSystemMessage("Connected to Argon AI assistant server", "success");
   };
 
   socket.onclose = () => {
-    setConnectionStatus(false);
-    showNotification("Disconnected from server", "error");
-    addSystemMessage("Connection lost. Please refresh the page to reconnect.");
+    statusIndicator.classList.remove("active");
+    statusText.textContent = "Disconnected";
+    addSystemMessage("Disconnected from Argon AI assistant server", "error");
   };
 
   socket.onerror = (error) => {
+    statusIndicator.classList.remove("active");
+    statusText.textContent = "Connection Error";
+    addSystemMessage(
+      "Connection error. Please check if the server is running.",
+      "error"
+    );
     console.error("WebSocket error:", error);
-    showNotification("Connection error", "error");
   };
 
   socket.onmessage = (event) => {
-    const data = JSON.parse(event.data);
+    try {
+      const data = JSON.parse(event.data);
 
-    if (data.type === "log") {
-      addLogEntry(data.message, data.level || "info");
-
-      if (data.level === "success" || data.message.includes("completed")) {
-        setProcessingState(false);
+      if (data.type === "response") {
+        removeTypingIndicator();
+        processAssistantResponse(data.content);
+      } else if (data.type === "status") {
+        showTypingIndicator(data.content);
+      } else if (data.type === "error") {
+        removeTypingIndicator();
+        addSystemMessage(`Error: ${data.content}`, "error");
       }
-    } else if (data.type === "response") {
-      parseAndDisplaySteps(data.message);
-      setProcessingState(false);
-    } else if (data.type === "error") {
-      addLogEntry(data.message, "error");
-      showNotification(data.message, "error");
-      setProcessingState(false);
-    } else if (data.type === "processing") {
-      setProcessingState(true);
+    } catch (e) {
+      console.error("Error parsing message:", e);
+      addSystemMessage("Error processing server response", "error");
     }
   };
 
-  function sendPrompt() {
-    const prompt = promptInput.value.trim();
-    if (!prompt || isProcessing) return;
+  function sendMessage() {
+    const message = messageInput.value.trim();
+    if (!message) return;
 
-    if (!currentTaskId) {
-      createNewTask().then(() => {
-        executePrompt(prompt);
-      });
-    } else {
-      executePrompt(prompt);
+    if (welcomeMessage) {
+      welcomeMessage.style.display = "none";
     }
+
+    addMessage("user", message);
+    showTypingIndicator("Thinking");
+
+    socket.send(JSON.stringify({ type: "message", content: message }));
+    messageInput.value = "";
+    adjustTextareaHeight();
   }
 
-  function executePrompt(prompt) {
-    addUserMessage(prompt);
-
-    promptInput.value = "";
-    promptInput.style.height = "auto";
-
-    setProcessingState(true);
-
-    abortController = new AbortController();
-
-    sendToServer({
-      type: "prompt",
-      prompt: prompt,
-      taskId: currentTaskId,
-      signal: abortController.signal,
-    });
-  }
-
-  function sendToServer(data) {
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(data));
-    } else {
-      showNotification("Connection not available", "error");
-      setProcessingState(false);
+  function processAssistantResponse(content) {
+    if (isNoActionSequence(content)) {
+      const formattedMessage = formatContent(
+        "**Operation Completed Successfully**\n\n" +
+          "No actions were required for this operation."
+      );
+      addSystemMessage(formattedMessage, "info");
+      return;
     }
-  }
 
-  function setConnectionStatus(isConnected) {
-    if (isConnected) {
-      statusDot.classList.remove("inactive");
-      statusDot.classList.add("active");
-      statusText.textContent = "Connected";
-    } else {
-      statusDot.classList.remove("active");
-      statusDot.classList.add("inactive");
-      statusText.textContent = "Disconnected";
-    }
-  }
+    const steps = extractMeaningfulSteps(content);
 
-  function setProcessingState(processing) {
-    isProcessing = processing;
-
-    if (processing) {
-      sendButton.disabled = true;
-      sendButton.style.display = "none";
-      stopButton.disabled = false;
-      stopButton.style.display = "flex";
-    } else {
-      sendButton.disabled = false;
-      sendButton.style.display = "flex";
-      stopButton.disabled = true;
-      stopButton.style.display = "none";
-    }
-  }
-
-  function addUserMessage(content) {
-    const messageElement = document.createElement("div");
-    messageElement.className = "message user";
-
-    const contentElement = document.createElement("div");
-    contentElement.className = "message-content";
-    contentElement.textContent = content;
-
-    const timestampElement = document.createElement("div");
-    timestampElement.className = "timestamp";
-    timestampElement.textContent = getCurrentTime();
-
-    messageElement.appendChild(contentElement);
-    messageElement.appendChild(timestampElement);
-
-    messagesContainer.appendChild(messageElement);
-    scrollToBottom();
-
-    if (currentTaskId) {
-      updateTaskPreview(currentTaskId, content);
-    }
-  }
-
-  function parseAndDisplaySteps(content) {
-    const stepRegex = /Step \d+:.*?(?=\nStep \d+|$)/gs;
-    const steps = content.match(stepRegex);
-
-    if (steps) {
+    if (steps.length > 0) {
       steps.forEach((step) => {
-        addSystemMessage(step);
+        const cleanedStep = cleanStepPresentation(step);
+        if (cleanedStep) {
+          addMessage("assistant", formatContent(cleanedStep));
+        }
       });
     } else {
-      addSystemMessage(content);
+      addMessage("assistant", formatContent(content));
     }
   }
 
-  function addSystemMessage(content) {
-    const messageElement = document.createElement("div");
-    messageElement.className = "message system";
+  function isNoActionSequence(content) {
+    const noActionPattern =
+      /(Step \d+: Thinking complete - no action needed[\s\S]*?){2,}/i;
+    return noActionPattern.test(content);
+  }
 
-    // Create content container
-    const contentContainer = document.createElement("div");
-    contentContainer.className = "message-inner-container";
-
-    // Create avatar element
-    const avatar = document.createElement("div");
-    avatar.className = "message-avatar";
-    avatar.innerHTML =
-      '<img src="https://www.3win.ai/wp-content/uploads/2025/03/image-110.png" alt="User Avatar">';
-
-    // Create content element
-    const contentElement = document.createElement("div");
-    contentElement.className = "message-content";
-
-    // Format the content with proper line breaks and list items
-    const formattedContent = content
-      .split("\n")
-      .map((line) => {
-        if (line.startsWith("* ")) {
-          return `<div class="list-item">${line.substring(2)}</div>`;
+  function extractMeaningfulSteps(content) {
+    return content
+      .split(/(Step \d+:)/i)
+      .filter((s) => s.trim())
+      .reduce((acc, curr, i, arr) => {
+        if (/^Step \d+:$/i.test(curr)) {
+          const next = arr[i + 1] || "";
+          if (!/Thinking complete - no action needed/i.test(next)) {
+            acc.push(curr + next);
+          }
         }
-        return line;
-      })
-      .join("<br>");
+        return acc;
+      }, []);
+  }
 
-    contentElement.innerHTML = formattedContent;
+  function cleanStepPresentation(step) {
+    return step
+      .replace(/^Step \d+:\s*/i, "")
+      .replace(/Thinking complete\s*-?\s*no action needed[.!]?\s*/gi, "")
+      .trim();
+  }
 
-    // Create timestamp
-    const timestamp = document.createElement("div");
-    timestamp.className = "timestamp";
-    timestamp.textContent = getCurrentTime();
+  function addMessage(role, content) {
+    const messageType = determineMessageType(content);
+    const messageElement = document.createElement("div");
+    messageElement.className = `message ${role} ${messageType}`;
 
-    // Assemble elements
-    contentContainer.appendChild(avatar);
-    contentContainer.appendChild(contentElement);
-    messageElement.appendChild(contentContainer);
-    messageElement.appendChild(timestamp);
+    const processedContent = processContent(content);
+    const formattedContent = formatContent(processedContent);
+
+    messageElement.innerHTML = `
+      <div class="message-inner-container">
+        <div class="message-avatar">
+          <img src="${
+            role === "user" ? USER_AVATAR : ASSISTANT_AVATAR
+          }" alt="${role}">
+        </div>
+        <div class="message-content">${formattedContent}</div>
+      </div>
+    `;
+
+    messageElement.querySelectorAll("pre code").forEach((block) => {
+      const copyButton = document.createElement("button");
+      copyButton.className = "copy-button";
+      copyButton.innerHTML = '<i class="fa fa-copy"></i>';
+      copyButton.onclick = () => {
+        navigator.clipboard.writeText(block.textContent);
+        showNotification("Code copied to clipboard!");
+      };
+      block.parentNode.insertBefore(copyButton, block);
+    });
 
     messagesContainer.appendChild(messageElement);
-    scrollToBottom();
-  }
-
-  function addLogEntry(content, level = "info") {
-    const logElement = document.createElement("div");
-    logElement.className = `log-entry ${level}`;
-
-    const pathRegex = /[A-Za-z]:\\[^\s]+/g;
-    const parts = content.split(pathRegex);
-    const matches = content.match(pathRegex);
-
-    if (matches) {
-      parts.forEach((part, index) => {
-        const span = document.createElement("span");
-        span.textContent = part;
-
-        logElement.appendChild(span);
-
-        if (index < matches.length) {
-          const path = matches[index];
-          const link = document.createElement("a");
-          link.className = "path-link";
-          link.textContent = path;
-          link.href = `file://${path}`;
-          link.target = "_blank";
-
-          logElement.appendChild(link);
-        }
-      });
-    } else {
-      logElement.textContent = content;
-    }
-
-    messagesContainer.appendChild(logElement);
-    scrollToBottom();
-  }
-
-  function scrollToBottom() {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }
 
-  function getCurrentTime() {
-    const now = new Date();
-    return now.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  function determineMessageType(content) {
+    if (content.includes("Observed output")) return "observation";
+    if (content.includes("Error:")) return "error";
+    if (content.includes("Thinking complete")) return "thinking";
+    if (content.includes("based on the web search")) return "summary";
+    if (content.includes("Okay, based on")) return "summary";
+    return "info";
   }
 
-  function getFormattedDate() {
-    const now = new Date();
-    return (
-      now.toLocaleDateString() +
-      " " +
-      now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  function processContent(content) {
+    content = content.replace(
+      /([A-Z]:\\[^\s]+|\\\\.+?)(?=\s|$)/gi,
+      (match) =>
+        `<a href="file:///${match}" class="file-link" title="Open in file explorer">${match}</a>`
     );
+    content = content.replace(/(\d+\s+)(<.*)/g, (_, num, code) => code);
+    return content
+      .split("\n")
+      .filter(
+        (line) =>
+          !/^(Observed output|Tool|Metadata|Clicked|Navigated|Scrolled)/i.test(
+            line
+          )
+      )
+      .join("\n");
   }
 
-  function showNotification(message, type = "info") {
-    const notification = document.createElement("div");
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
+  function formatContent(content) {
+    if (typeof marked !== "undefined") {
+      marked.setOptions({
+        highlight: function (code) {
+          return hljs.highlightAuto(code).value;
+        },
+        langPrefix: "hljs language-",
+        sanitize: true,
+      });
+      return marked.parse(content);
+    }
+    return content
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\n\n/g, "<br><br>")
+      .replace(/\n/g, "<br>");
+  }
 
-    notificationsContainer.appendChild(notification);
+  function showTypingIndicator(text) {
+    removeTypingIndicator();
+    const typingIndicator = document.createElement("div");
+    typingIndicator.className = "message assistant typing-indicator";
+    typingIndicator.innerHTML = `
+      <div class="message-inner-container">
+        <div class="message-avatar">
+          <img src="${ASSISTANT_AVATAR}" alt="Assistant">
+        </div>
+        <div class="message-content">${text}</div>
+      </div>
+    `;
+    messagesContainer.appendChild(typingIndicator);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
 
+  function addSystemMessage(content, type = "info") {
+    const messageElement = document.createElement("div");
+    messageElement.className = `log-entry ${type}`;
+    messageElement.innerHTML = `
+      <div class="message-inner-container">
+        <div class="message-avatar">
+          <img src="${ASSISTANT_AVATAR}" alt="System">
+        </div>
+        <div class="message-content">${content}</div>
+      </div>
+    `;
+    messagesContainer.appendChild(messageElement);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  function removeTypingIndicator() {
+    const indicator = document.querySelector(".typing-indicator");
+    if (indicator) indicator.remove();
+  }
+
+  function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).substring(2);
+  }
+
+  function adjustTextareaHeight() {
+    messageInput.style.height = "auto";
+    messageInput.style.height = messageInput.scrollHeight + "px";
+  }
+
+  function createNewChat() {
+    currentChatId = generateId();
+    chats[currentChatId] = { messages: [] };
+    messagesContainer.innerHTML = "";
+    if (welcomeMessage) welcomeMessage.style.display = "flex";
+    contextBadge.textContent = `Current Discussion: New Chat`;
+    contextBadge.style.opacity = 1;
     setTimeout(() => {
-      notification.remove();
+      contextBadge.style.opacity = 0;
     }, 3000);
   }
 
-  async function createNewTask() {
-    const taskId = "task_" + Date.now();
-    const timestamp = getFormattedDate();
-    const newTask = {
-      id: taskId,
-      title: "New Task",
-      preview: "No content yet",
-      timestamp: timestamp,
-      messages: [],
-    };
-
-    tasks.push(newTask);
-    createTaskElement(newTask);
-    selectTask(taskId);
-    updateLocalStorage();
-
-    return taskId;
+  function showNotification(message) {
+    const notification = document.createElement("div");
+    notification.className = "notification";
+    notification.textContent = message;
+    document.getElementById("notifications").appendChild(notification);
+    setTimeout(() => notification.remove(), 3000);
   }
 
-  function createTaskElement(task) {
-    noTasksElement.style.display = "none";
-    const taskElement = document.createElement("div");
-    taskElement.className = "task-item";
-    taskElement.id = `task-${task.id}`;
-    taskElement.dataset.taskId = task.id;
-
-    const titleElement = document.createElement("div");
-    titleElement.className = "task-title";
-    titleElement.textContent = task.title;
-
-    const previewElement = document.createElement("div");
-    previewElement.className = "task-preview";
-    previewElement.textContent = task.preview;
-
-    const timestampElement = document.createElement("div");
-    timestampElement.className = "timestamp";
-    timestampElement.textContent = task.timestamp;
-
-    taskElement.appendChild(titleElement);
-    taskElement.appendChild(previewElement);
-    taskElement.appendChild(timestampElement);
-
-    taskElement.addEventListener("click", () => {
-      selectTask(task.id);
-    });
-
-    taskList.insertBefore(taskElement, taskList.firstChild);
-  }
-
-  function selectTask(taskId) {
-    document.querySelectorAll(".task-item").forEach((item) => {
-      item.classList.remove("selected");
-    });
-
-    const taskElement = document.getElementById(`task-${taskId}`);
-    if (taskElement) {
-      taskElement.classList.add("selected");
+  document.addEventListener("click", (e) => {
+    if (e.target.classList.contains("file-link")) {
+      e.preventDefault();
+      const path = e.target.getAttribute("href").replace("file:///", "");
+      showNotification(
+        `Cannot open paths directly in browser - security restriction`
+      );
     }
+  });
 
-    currentTaskId = taskId;
-    messagesContainer.innerHTML = "";
-
-    const task = tasks.find((t) => t.id === taskId);
-    if (task) {
-      if (task.messages && task.messages.length > 0) {
-        task.messages.forEach((msg) => {
-          if (msg.sender === "user") {
-            addUserMessage(msg.content);
-          } else {
-            addSystemMessage(msg.content);
-          }
-        });
-      } else {
-        addSystemMessage("New task started. Enter your prompt to begin.");
-      }
-
-      contextBadge.textContent = `Current task: ${task.title}`;
-      contextBadge.style.opacity = "1";
-      setTimeout(() => {
-        contextBadge.style.opacity = "0";
-      }, 3000);
+  sendBtn.addEventListener("click", sendMessage);
+  newTaskButton.addEventListener("click", createNewChat);
+  messageInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
     }
-
-    if (window.innerWidth <= 768) {
-      sidebar.classList.remove("show");
-    }
-  }
-
-  function updateTaskPreview(taskId, content) {
-    const task = tasks.find((t) => t.id === taskId);
-    if (task) {
-      task.preview =
-        content.length > 40 ? content.substring(0, 40) + "..." : content;
-      task.title = `Task ${tasks.indexOf(task) + 1}`;
-      task.messages.push({
-        sender: "user",
-        content: content,
-        timestamp: new Date().toISOString(),
-      });
-
-      const taskElement = document.getElementById(`task-${taskId}`);
-      if (taskElement) {
-        const titleElement = taskElement.querySelector(".task-title");
-        const previewElement = taskElement.querySelector(".task-preview");
-
-        if (titleElement) titleElement.textContent = task.title;
-        if (previewElement) previewElement.textContent = task.preview;
-      }
-
-      updateLocalStorage();
-    }
-  }
-
-  function updateLocalStorage() {
-    localStorage.setItem("openmanus_tasks", JSON.stringify(tasks));
-  }
-
-  function loadTasksFromStorage() {
-    const storedTasks = localStorage.getItem("openmanus_tasks");
-    if (storedTasks) {
-      tasks = JSON.parse(storedTasks);
-      if (tasks.length > 0) {
-        noTasksElement.style.display = "none";
-        tasks.forEach((task) => createTaskElement(task));
-      }
-    }
-  }
-
-  loadTasksFromStorage();
+  });
+  messageInput.addEventListener("input", adjustTextareaHeight);
+  stopBtn.addEventListener("click", () => {
+    socket.send(JSON.stringify({ type: "stop" }));
+    removeTypingIndicator();
+    stopBtn.disabled = true;
+    addSystemMessage("Generation stopped", "info");
+  });
 });
