@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpenManus</title>
+    <title>Argon AI Agent</title>
+    <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="stylesheet" href="styles.css" />
     <link
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Fira+Code:wght@400;500&family=Cormorant:wght@300;400;500;600&display=swap"
@@ -12,11 +13,10 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link
       rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     />
   </head>
   <body>
-    <!-- Background orbs -->
     <div class="orbs-container">
       <div class="orb orb-1"></div>
       <div class="orb orb-2"></div>
@@ -37,6 +37,17 @@
         <div class="task-list" id="task-list">
           <div class="no-tasks" id="no-tasks">No discussions yet</div>
         </div>
+        <div class="sidebar-controls">
+          <button class="control-btn" data-modal="settings-modal">
+            <i class="fas fa-cog"></i>
+          </button>
+          <button class="control-btn" data-modal="templates-modal">
+            <i class="fas fa-file-alt"></i>
+          </button>
+          <button class="control-btn" data-modal="credits-modal">
+            <i class="fas fa-info-circle"></i>
+          </button>
+        </div>
       </div>
 
       <div class="chat-container">
@@ -46,9 +57,7 @@
             Exemple : "Make me a speech deck for..."
           </div>
         </div>
-        <div class="messages-container" id="messages-container">
-          <!-- Messages will be added here by JavaScript -->
-        </div>
+        <div class="messages-container" id="messages-container"></div>
         <div class="input-container">
           <div class="input-wrapper">
             <textarea id="prompt-input" placeholder=" " rows="1"></textarea>
@@ -82,6 +91,105 @@
 
     <div id="context-badge">Current Discussion: None</div>
     <div class="notifications" id="notifications"></div>
+
+    <div class="modal-overlay" id="modal-overlay"></div>
+
+    <div class="modal" id="settings-modal">
+      <div class="modal-header">
+        <h3>Configuration Settings</h3>
+        <button class="modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-content">
+        <div class="settings-tabs">
+          <button class="tab-btn active" data-tab="llm-settings">LLM</button>
+          <button class="tab-btn" data-tab="vision-settings">Vision</button>
+          <button class="tab-btn" data-tab="mcp-settings">MCP</button>
+        </div>
+        <form id="config-form">
+          <div class="tab-content active" id="llm-settings">
+            <div class="form-group">
+              <label>Model</label>
+              <input type="text" name="llm.model" required />
+            </div>
+            <div class="form-group">
+              <label>API URL</label>
+              <input type="url" name="llm.base_url" required />
+            </div>
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" name="llm.api_key" required />
+            </div>
+            <div class="form-group range-group">
+              <label>Max Tokens <span class="value-display">4096</span></label>
+              <input
+                type="range"
+                name="llm.max_tokens"
+                min="512"
+                max="8192"
+                step="512"
+                value="4096"
+              />
+            </div>
+            <div class="form-group range-group">
+              <label>Temperature <span class="value-display">0.0</span></label>
+              <input
+                type="range"
+                name="llm.temperature"
+                min="0"
+                max="1"
+                step="0.1"
+                value="0.0"
+              />
+            </div>
+          </div>
+          <div class="tab-content" id="vision-settings"></div>
+          <div class="tab-content" id="mcp-settings">
+            <div class="form-group">
+              <label>Server Reference</label>
+              <input type="text" name="mcp.server_reference" required />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="save-btn">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal" id="credits-modal">
+      <div class="modal-header">
+        <h3>Credits & Information</h3>
+        <button class="modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-content">
+        <div class="credits-content">
+          <img src="logo.png" alt="Argon AI Logo" class="credits-logo" />
+          <h4>Argon AI Agent</h4>
+          <p>by Léo Tosku</p>
+          <p>Based on OpenManus</p>
+          <div class="social-links">
+            <a href="#"><i class="fab fa-github"></i> GitHub</a>
+            <a href="#"><i class="fas fa-book"></i> Documentation</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="templates-modal">
+      <div class="modal-header">
+        <h3>Prompt Templates</h3>
+        <button class="modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-content">
+        <div class="template-list">
+          <div class="template-item">
+            <h4>Business Plan</h4>
+            <p>Create a business plan for...</p>
+            <button class="use-template">Use</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <script src="script.js"></script>
   </body>
